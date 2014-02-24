@@ -59,6 +59,5 @@ public class AudiotestActivity extends Activity {
 			e.printStackTrace();
 		}
     	thread = null;
-    	
     }
 }

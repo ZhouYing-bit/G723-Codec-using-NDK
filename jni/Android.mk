@@ -9,8 +9,22 @@ LOCAL_CPPFLAGS :=$(LOCAL_CFLAGS)
 ###
 
 LOCAL_SRC_FILES := opensl_example.c \
-opensl_io.c \
-java_interface_wrap.cpp 
+	opensl_io.c \
+	java_interface_wrap.cpp \
+	basop.c \
+	cod_cng.c \
+	coder.c \
+	dec_cng.c \
+	decod.c \
+	exc_lbc.c \
+	lbccodec.c \
+	lpc.c \
+	lsp.c \
+	tab_lbc.c \
+	tame.c \
+	util_cng.c \
+	util_lbc.c \
+	vad.c \
 
 LOCAL_LDLIBS := -llog -lOpenSLES
 

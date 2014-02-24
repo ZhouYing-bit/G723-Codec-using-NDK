@@ -1,33 +1,6 @@
-/*
-opensl_io.c:
-Android OpenSL input/output module
-Copyright (c) 2012, Victor Lazzarini
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in the
-      documentation and/or other materials provided with the distribution.
-    * Neither the name of the <organization> nor the
-      names of its contributors may be used to endorse or promote products
-      derived from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
 #include "opensl_io.h"
+#include <stdio.h>
+#include <assert.h>
 #define CONV16BIT 32768
 #define CONVMYFLT (1./32768.)
 
@@ -44,17 +17,17 @@ static SLresult openSLCreateEngine(OPENSL_STREAM *p)
   SLresult result;
   // create engine
   result = slCreateEngine(&(p->engineObject), 0, NULL, 0, NULL, NULL);
-  if(result != SL_RESULT_SUCCESS) goto  engine_end;
+  assert(SL_RESULT_SUCCESS == result);
 
-  // realize the engine 
+  // realize the engine
   result = (*p->engineObject)->Realize(p->engineObject, SL_BOOLEAN_FALSE);
-  if(result != SL_RESULT_SUCCESS) goto engine_end;
+  assert(SL_RESULT_SUCCESS == result);
 
   // get the engine interface, which is needed in order to create other objects
   result = (*p->engineObject)->GetInterface(p->engineObject, SL_IID_ENGINE, &(p->engineEngine));
-  if(result != SL_RESULT_SUCCESS) goto  engine_end;
+  //if(result != SL_RESULT_SUCCESS) goto  engine_end;
+  assert(SL_RESULT_SUCCESS == result);
 
- engine_end:
   return result;
 }
 
@@ -69,60 +42,19 @@ static SLresult openSLPlayOpen(OPENSL_STREAM *p)
     // configure audio source
     SLDataLocator_AndroidSimpleBufferQueue loc_bufq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, 2};
 
-    switch(sr){
+    sr = SL_SAMPLINGRATE_8;
 
-    case 8000:
-      sr = SL_SAMPLINGRATE_8;
-      break;
-    case 11025:
-      sr = SL_SAMPLINGRATE_11_025;
-      break;
-    case 16000:
-      sr = SL_SAMPLINGRATE_16;
-      break;
-    case 22050:
-      sr = SL_SAMPLINGRATE_22_05;
-      break;
-    case 24000:
-      sr = SL_SAMPLINGRATE_24;
-      break;
-    case 32000:
-      sr = SL_SAMPLINGRATE_32;
-      break;
-    case 44100:
-      sr = SL_SAMPLINGRATE_44_1;
-      break;
-    case 48000:
-      sr = SL_SAMPLINGRATE_48;
-      break;
-    case 64000:
-      sr = SL_SAMPLINGRATE_64;
-      break;
-    case 88200:
-      sr = SL_SAMPLINGRATE_88_2;
-      break;
-    case 96000:
-      sr = SL_SAMPLINGRATE_96;
-      break;
-    case 192000:
-      sr = SL_SAMPLINGRATE_192;
-      break;
-    default:
-      return -1;
-    }
-   
     const SLInterfaceID ids[] = {SL_IID_VOLUME};
     const SLboolean req[] = {SL_BOOLEAN_FALSE};
     result = (*p->engineEngine)->CreateOutputMix(p->engineEngine, &(p->outputMixObject), 1, ids, req);
-    if(result != SL_RESULT_SUCCESS) goto end_openaudio;
+    assert(SL_RESULT_SUCCESS == result);
 
     // realize the output mix
     result = (*p->outputMixObject)->Realize(p->outputMixObject, SL_BOOLEAN_FALSE);
-   
+
     int speakers;
-    if(channels > 1) 
-      speakers = SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT;
-    else speakers = SL_SPEAKER_FRONT_CENTER;
+    speakers = SL_SPEAKER_FRONT_CENTER;
+
     SLDataFormat_PCM format_pcm = {SL_DATAFORMAT_PCM,channels, sr,
 				   SL_PCMSAMPLEFORMAT_FIXED_16, SL_PCMSAMPLEFORMAT_FIXED_16,
 				   speakers, SL_BYTEORDER_LITTLEENDIAN};
@@ -134,33 +66,41 @@ static SLresult openSLPlayOpen(OPENSL_STREAM *p)
     SLDataSink audioSnk = {&loc_outmix, NULL};
 
     // create audio player
-    const SLInterfaceID ids1[] = {SL_IID_ANDROIDSIMPLEBUFFERQUEUE};
-    const SLboolean req1[] = {SL_BOOLEAN_TRUE};
+    const SLInterfaceID ids1[] = {SL_IID_ANDROIDCONFIGURATION, SL_IID_ANDROIDSIMPLEBUFFERQUEUE};
+    const SLboolean req1[] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE};
     result = (*p->engineEngine)->CreateAudioPlayer(p->engineEngine, &(p->bqPlayerObject), &audioSrc, &audioSnk,
-						   1, ids1, req1);
-    if(result != SL_RESULT_SUCCESS) goto end_openaudio;
+						   2, ids1, req1);
+    assert(SL_RESULT_SUCCESS == result);
+
+    // My code
+    SLAndroidConfigurationItf playerConfig;
+    result = (*p->bqPlayerObject)->GetInterface(p->bqPlayerObject, SL_IID_ANDROIDCONFIGURATION, &playerConfig);
+    assert(SL_RESULT_SUCCESS == result);
+    SLint32 streamType = SL_ANDROID_STREAM_VOICE;
+    result = (*playerConfig)->SetConfiguration(playerConfig, SL_ANDROID_KEY_STREAM_TYPE, &streamType, sizeof(SLint32));
+    assert(SL_RESULT_SUCCESS == result);
+    // End my code
 
     // realize the player
     result = (*p->bqPlayerObject)->Realize(p->bqPlayerObject, SL_BOOLEAN_FALSE);
-    if(result != SL_RESULT_SUCCESS) goto end_openaudio;
+    assert(SL_RESULT_SUCCESS == result);
 
     // get the play interface
     result = (*p->bqPlayerObject)->GetInterface(p->bqPlayerObject, SL_IID_PLAY, &(p->bqPlayerPlay));
-    if(result != SL_RESULT_SUCCESS) goto end_openaudio;
+    assert(SL_RESULT_SUCCESS == result);
 
     // get the buffer queue interface
     result = (*p->bqPlayerObject)->GetInterface(p->bqPlayerObject, SL_IID_ANDROIDSIMPLEBUFFERQUEUE,
 						&(p->bqPlayerBufferQueue));
-    if(result != SL_RESULT_SUCCESS) goto end_openaudio;
+    assert(SL_RESULT_SUCCESS == result);
 
     // register callback on the buffer queue
     result = (*p->bqPlayerBufferQueue)->RegisterCallback(p->bqPlayerBufferQueue, bqPlayerCallback, p);
-    if(result != SL_RESULT_SUCCESS) goto end_openaudio;
+    assert(SL_RESULT_SUCCESS == result);
 
     // set the player's state to playing
     result = (*p->bqPlayerPlay)->SetPlayState(p->bqPlayerPlay, SL_PLAYSTATE_PLAYING);
  
-  end_openaudio:
     return result;
   }
   return SL_RESULT_SUCCESS;
@@ -175,48 +115,8 @@ static SLresult openSLRecOpen(OPENSL_STREAM *p){
 
   if(channels){
 
-    switch(sr){
+	sr = SL_SAMPLINGRATE_8;
 
-    case 8000:
-      sr = SL_SAMPLINGRATE_8;
-      break;
-    case 11025:
-      sr = SL_SAMPLINGRATE_11_025;
-      break;
-    case 16000:
-      sr = SL_SAMPLINGRATE_16;
-      break;
-    case 22050:
-      sr = SL_SAMPLINGRATE_22_05;
-      break;
-    case 24000:
-      sr = SL_SAMPLINGRATE_24;
-      break;
-    case 32000:
-      sr = SL_SAMPLINGRATE_32;
-      break;
-    case 44100:
-      sr = SL_SAMPLINGRATE_44_1;
-      break;
-    case 48000:
-      sr = SL_SAMPLINGRATE_48;
-      break;
-    case 64000:
-      sr = SL_SAMPLINGRATE_64;
-      break;
-    case 88200:
-      sr = SL_SAMPLINGRATE_88_2;
-      break;
-    case 96000:
-      sr = SL_SAMPLINGRATE_96;
-      break;
-    case 192000:
-      sr = SL_SAMPLINGRATE_192;
-      break;
-    default:
-      return -1;
-    }
-    
     // configure audio source
     SLDataLocator_IODevice loc_dev = {SL_DATALOCATOR_IODEVICE, SL_IODEVICE_AUDIOINPUT,
 				      SL_DEFAULTDEVICEID_AUDIOINPUT, NULL};
@@ -224,9 +124,8 @@ static SLresult openSLRecOpen(OPENSL_STREAM *p){
 
     // configure audio sink
     int speakers;
-    if(channels > 1) 
-      speakers = SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT;
-    else speakers = SL_SPEAKER_FRONT_CENTER;
+    speakers = SL_SPEAKER_FRONT_CENTER;
+
     SLDataLocator_AndroidSimpleBufferQueue loc_bq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, 2};
     SLDataFormat_PCM format_pcm = {SL_DATAFORMAT_PCM, channels, sr,
 				   SL_PCMSAMPLEFORMAT_FIXED_16, SL_PCMSAMPLEFORMAT_FIXED_16,
@@ -235,36 +134,59 @@ static SLresult openSLRecOpen(OPENSL_STREAM *p){
 
     // create audio recorder
     // (requires the RECORD_AUDIO permission)
-    const SLInterfaceID id[1] = {SL_IID_ANDROIDSIMPLEBUFFERQUEUE};
-    const SLboolean req[1] = {SL_BOOLEAN_TRUE};
+    const SLInterfaceID id[] = {SL_IID_ANDROIDSIMPLEBUFFERQUEUE, SL_IID_ANDROIDCONFIGURATION};
+    const SLboolean req[] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE};
     result = (*p->engineEngine)->CreateAudioRecorder(p->engineEngine, &(p->recorderObject), &audioSrc,
-						     &audioSnk, 1, id, req);
-    if (SL_RESULT_SUCCESS != result) goto end_recopen;
+						     &audioSnk, 2, id, req);
+    assert(SL_RESULT_SUCCESS == result);
+
+    // My code
+    SLAndroidConfigurationItf recorderConfig;
+    //result = (*p->bqPlayerObject)->GetInterface(p->bqPlayerObject, SL_IID_ANDROIDCONFIGURATION, &playerConfig);
+	//SLint32 streamType = SL_ANDROID_STREAM_VOICE;
+    //result = (*playerConfig)->SetConfiguration(playerConfig, SL_ANDROID_KEY_STREAM_TYPE, &streamType, sizeof(SLint32));
+
+//#ifdef __ANDROID__
+	/* Set Android configuration */
+    result = (*p->recorderObject)->GetInterface(p->recorderObject,
+    		SL_IID_ANDROIDCONFIGURATION,
+            &recorderConfig);
+    assert(SL_RESULT_SUCCESS == result);
+	if (result == SL_RESULT_SUCCESS) {
+    	//SLint32 streamType = SL_ANDROID_RECORDING_PRESET_GENERIC;
+//#if __ANDROID_API__ >= 14
+		SLint32 streamType = SL_ANDROID_RECORDING_PRESET_VOICE_COMMUNICATION;
+//#endif
+    	result = (*recorderConfig)->SetConfiguration(
+    			recorderConfig, SL_ANDROID_KEY_RECORDING_PRESET,
+    			&streamType, sizeof(SLint32));
+    	assert(SL_RESULT_SUCCESS == result);
+        }
+
+//#endif
+    // My recorder configuration code ends.
 
     // realize the audio recorder
     result = (*p->recorderObject)->Realize(p->recorderObject, SL_BOOLEAN_FALSE);
-    if (SL_RESULT_SUCCESS != result) goto end_recopen;
+    assert(SL_RESULT_SUCCESS == result);
 
     // get the record interface
     result = (*p->recorderObject)->GetInterface(p->recorderObject, SL_IID_RECORD, &(p->recorderRecord));
-    if (SL_RESULT_SUCCESS != result) goto end_recopen;
- 
+    assert(SL_RESULT_SUCCESS == result);
+
     // get the buffer queue interface
     result = (*p->recorderObject)->GetInterface(p->recorderObject, SL_IID_ANDROIDSIMPLEBUFFERQUEUE,
 						&(p->recorderBufferQueue));
-    if (SL_RESULT_SUCCESS != result) goto end_recopen;
+    assert(SL_RESULT_SUCCESS == result);
 
     // register callback on the buffer queue
-    result = (*p->recorderBufferQueue)->RegisterCallback(p->recorderBufferQueue, bqRecorderCallback,
-							 p);
-    if (SL_RESULT_SUCCESS != result) goto end_recopen;
+    result = (*p->recorderBufferQueue)->RegisterCallback(p->recorderBufferQueue, bqRecorderCallback, p);
+    assert(SL_RESULT_SUCCESS == result);
     result = (*p->recorderRecord)->SetRecordState(p->recorderRecord, SL_RECORDSTATE_RECORDING);
 
-  end_recopen: 
     return result;
   }
   else return SL_RESULT_SUCCESS;
-
 
 }
 
@@ -303,10 +225,9 @@ static void openSLDestroyEngine(OPENSL_STREAM *p){
 
 }
 
-
 // open the android audio device for input and/or output
 OPENSL_STREAM *android_OpenAudioDevice(int sr, int inchannels, int outchannels, int bufferframes){
-  
+
   OPENSL_STREAM *p;
   p = (OPENSL_STREAM *) calloc(sizeof(OPENSL_STREAM),1);
 
@@ -328,14 +249,14 @@ OPENSL_STREAM *android_OpenAudioDevice(int sr, int inchannels, int outchannels, 
     if((p->inputBuffer[0] = (short *) calloc(p->inBufSamples, sizeof(short))) == NULL ||
        (p->inputBuffer[1] = (short *) calloc(p->inBufSamples, sizeof(short))) == NULL){
       android_CloseAudioDevice(p);
-      return NULL; 
+      return NULL;
     }
   }
 
   p->currentInputIndex = 0;
   p->currentOutputBuffer  = 0;
   p->currentInputIndex = p->inBufSamples;
-  p->currentInputBuffer = 0; 
+  p->currentInputBuffer = 0;
 
   if(openSLCreateEngine(p) != SL_RESULT_SUCCESS) {
     android_CloseAudioDevice(p);
@@ -345,12 +266,12 @@ OPENSL_STREAM *android_OpenAudioDevice(int sr, int inchannels, int outchannels, 
   if(openSLRecOpen(p) != SL_RESULT_SUCCESS) {
     android_CloseAudioDevice(p);
     return NULL;
-  } 
+  }
 
   if(openSLPlayOpen(p) != SL_RESULT_SUCCESS) {
     android_CloseAudioDevice(p);
     return NULL;
-  }  
+  }
 
   notifyThreadLock(p->outlock);
   notifyThreadLock(p->inlock);
@@ -372,13 +293,13 @@ void android_CloseAudioDevice(OPENSL_STREAM *p){
     destroyThreadLock(p->inlock);
     p->inlock = NULL;
   }
-    
+
   if (p->outlock != NULL) {
     notifyThreadLock(p->outlock);
     destroyThreadLock(p->outlock);
     p->inlock = NULL;
   }
-    
+
   if (p->outputBuffer[0] != NULL) {
     free(p->outputBuffer[0]);
     p->outputBuffer[0] = NULL;
@@ -416,7 +337,7 @@ void bqRecorderCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
 }
  
 // gets a buffer of size samples from the device
-int android_AudioIn(OPENSL_STREAM *p,float *buffer,int size){
+int android_AudioIn(OPENSL_STREAM *p,short *buffer,int size){
   short *inBuffer;
   int i, bufsamps = p->inBufSamples, index = p->currentInputIndex;
   if(p == NULL || bufsamps ==  0) return 0;
@@ -425,16 +346,18 @@ int android_AudioIn(OPENSL_STREAM *p,float *buffer,int size){
   for(i=0; i < size; i++){
     if (index >= bufsamps) {
       waitThreadLock(p->inlock);
-      (*p->recorderBufferQueue)->Enqueue(p->recorderBufferQueue, 
+      (*p->recorderBufferQueue)->Enqueue(p->recorderBufferQueue,
 					 inBuffer,bufsamps*sizeof(short));
       p->currentInputBuffer = (p->currentInputBuffer ? 0 : 1);
       index = 0;
       inBuffer = p->inputBuffer[p->currentInputBuffer];
     }
-    buffer[i] = (float) inBuffer[index++]*CONVMYFLT;
+
+    buffer[i] = inBuffer[index++];
   }
   p->currentInputIndex = index;
   if(p->outchannels == 0) p->time += (double) size/(p->sr*p->inchannels);
+
   return i;
 }
 
@@ -446,7 +369,7 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
 }
 
 // puts a buffer of size samples to the device
-int android_AudioOut(OPENSL_STREAM *p, float *buffer,int size){
+int android_AudioOut(OPENSL_STREAM *p, short *buffer,int size){
 
   short *outBuffer;
   int i, bufsamps = p->outBufSamples, index = p->currentOutputIndex;
@@ -454,10 +377,10 @@ int android_AudioOut(OPENSL_STREAM *p, float *buffer,int size){
   outBuffer = p->outputBuffer[p->currentOutputBuffer];
 
   for(i=0; i < size; i++){
-    outBuffer[index++] = (short) (buffer[i]*CONV16BIT);
+	outBuffer[index++] = buffer[i];
     if (index >= p->outBufSamples) {
       waitThreadLock(p->outlock);
-      (*p->bqPlayerBufferQueue)->Enqueue(p->bqPlayerBufferQueue, 
+      (*p->bqPlayerBufferQueue)->Enqueue(p->bqPlayerBufferQueue,
 					 outBuffer,bufsamps*sizeof(short));
       p->currentOutputBuffer = (p->currentOutputBuffer ?  0 : 1);
       index = 0;
