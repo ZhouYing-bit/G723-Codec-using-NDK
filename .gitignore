@@ -1,0 +1,9 @@
+.classpath
+.project
+bin/*
+jni/.DS_Store
+.DS_Store
+.settings/
+_classpath.xml
+_project.xml
+gen/*
